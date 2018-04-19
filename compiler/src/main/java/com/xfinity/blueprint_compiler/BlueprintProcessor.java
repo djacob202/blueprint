@@ -31,9 +31,12 @@ import javax.annotation.processing.Processor;
 import javax.annotation.processing.RoundEnvironment;
 import javax.lang.model.SourceVersion;
 import javax.lang.model.element.Element;
+import javax.lang.model.element.Modifier;
 import javax.lang.model.element.TypeElement;
+import javax.lang.model.element.VariableElement;
 import javax.lang.model.type.MirroredTypeException;
 import javax.lang.model.type.TypeMirror;
+
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -109,7 +112,34 @@ public class BlueprintProcessor extends AbstractProcessor {
 
             String viewHolderClassName = ((Symbol.ClassSymbol) annotatedClass).fullname.toString();
 
-            componentViewInfoList.add(new ComponentViewInfo(viewType, viewHolderClassName));
+            Map<String, String> children = new HashMap<>();
+
+            for (Element enclosedElement : annotatedElement.getEnclosedElements()) {
+
+                // We only look at fields
+                if (enclosedElement.getKind().isField()) {
+                    VariableElement variable = (VariableElement) enclosedElement;
+
+                    // Only do things with Public items
+                    // (because we set/get outside the ViewHolder in the view class)
+                    if (!variable.getModifiers().contains(Modifier.PUBLIC)) {
+                        continue;
+                    }
+
+                    String variableName = variable.getSimpleName().toString();
+                    if (isTextView(variable)) {
+                        children.put(variableName, "android.widget.Textview");
+                    } else if (isAndroidView(variable)) {
+                        children.put(variableName, "android.view.View");
+                    } else {
+                        // TODO: Do we care about other types of objects?
+                    }
+                }
+            }
+
+            ComponentViewInfo componentViewInfo = new ComponentViewInfo(viewType, viewHolderClassName);
+            componentViewInfo.children = children;
+            componentViewInfoList.add(componentViewInfo);
         }
 
         for (Element annotatedElement : roundEnv.getElementsAnnotatedWith(ComponentViewHolderBinder.class)) {
@@ -190,6 +220,16 @@ public class BlueprintProcessor extends AbstractProcessor {
         return true;
     }
 
+    private boolean isAndroidView(VariableElement variable) {
+        TypeElement viewElement = processingEnv.getElementUtils().getTypeElement("android.view.View");
+        return processingEnv.getTypeUtils().isAssignable(variable.asType(), viewElement.asType());
+    }
+
+    private boolean isTextView(VariableElement variable) {
+        TypeElement textViewElement = processingEnv.getElementUtils().getTypeElement("android.widget.Textview");
+        return processingEnv.getTypeUtils().isAssignable(variable.asType(), textViewElement.asType());
+    }
+
     private boolean isValidClass(TypeElement annotatedClass) {
         TypeElement applicationTypeElement = processingEnv.getElementUtils().getTypeElement("android.support.v7.widget.RecyclerView.ViewHolder");
         return processingEnv.getTypeUtils().isAssignable(annotatedClass.asType(), applicationTypeElement.asType());
@@ -220,6 +260,7 @@ public class BlueprintProcessor extends AbstractProcessor {
         String defaultPresenter;
         String componentView;
         String viewBinder;
+        Map<String, String> children;
 
         ComponentViewInfo(int viewType, String viewHolder) {
             this.viewType = viewType;

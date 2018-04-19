@@ -27,7 +27,9 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+import static com.squareup.javapoet.TypeName.BOOLEAN;
 import static com.squareup.javapoet.TypeName.INT;
+import static com.squareup.javapoet.TypeName.VOID;
 import static com.squareup.javapoet.TypeSpec.classBuilder;
 import static javax.lang.model.element.Modifier.PUBLIC;
 
@@ -287,17 +289,67 @@ final class CodeGenerator {
                 onBindViewHolderMethodFields.add(viewBinderFieldSpec);
             }
 
+            List<MethodSpec> methods = Arrays.asList(getViewHolderMethod,
+                                                        setViewHolderMethod,
+                                                        getComponentViewBinderMethod,
+                                                        onCreateViewHolderMethod,
+                                                        onBindViewHolderMethod,
+                                                        getViewTypeMethod);
+
+            if (componentViewInfo.children != null) {
+                for (String child : componentViewInfo.children.keySet()) {
+                    String type = componentViewInfo.children.get(child);
+                    if (type.equals("android.widget.Textview")) {
+                        ParameterSpec textParam =
+                                ParameterSpec.builder(ClassName.get("java.lang.CharSequence", "CharSequence"),
+                                        "text").build();
+
+                        MethodSpec setTextMethod =
+                                MethodSpec.methodBuilder("set" + child + "Text")
+                                        .addModifiers(PUBLIC)
+                                        .addParameter(textParam)
+                                        .returns(VOID)
+                                        .addStatement("viewHolder." + child + ".setText(text);")
+                                        .build();
+
+                        methods.add(setTextMethod);
+
+                        ParameterSpec visibilityParam =
+                                ParameterSpec.builder(INT, "visibility").build();
+
+                        MethodSpec setVisibilityMethod =
+                                MethodSpec.methodBuilder("set" + child + "Visibility")
+                                        .addModifiers(PUBLIC)
+                                        .addParameter(visibilityParam)
+                                        .returns(VOID)
+                                        .addStatement("viewHolder." + child + ".setVisibility(visibility);")
+                                        .build();
+
+                        methods.add(setVisibilityMethod);
+                    } else if (type.equals("android.view.View")) {
+                        ParameterSpec visibilityParam =
+                                ParameterSpec.builder(INT, "visibility").build();
+
+                        MethodSpec setVisibilityMethod =
+                                MethodSpec.methodBuilder("set" + child + "Visibility")
+                                        .addModifiers(PUBLIC)
+                                        .addParameter(visibilityParam)
+                                        .returns(VOID)
+                                        .addStatement("viewHolder." + child + ".setVisibility(visibility);")
+                                        .build();
+
+                        methods.add(setVisibilityMethod);
+                    }
+
+                }
+            }
+
             onBindViewHolderMethodFields.add(viewHolderFieldSpec);
             TypeSpec.Builder classBuilder = classBuilder(componentViewInfo.viewTypeName + "Base")
                     .addModifiers(PUBLIC)
                     .addSuperinterface(componentViewTypeName)
                     .addFields(onBindViewHolderMethodFields)
-                    .addMethods(Arrays.asList(getViewHolderMethod,
-                                              setViewHolderMethod,
-                                              getComponentViewBinderMethod,
-                                              onCreateViewHolderMethod,
-                                              onBindViewHolderMethod,
-                                              getViewTypeMethod));
+                    .addMethods(methods);
 
             viewDelegatePairs.add(new Pair<>(componentViewPackageName, classBuilder.build()));
         }
